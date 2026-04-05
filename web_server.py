@@ -1,22 +1,19 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify
 from database import db
 import discord
 import asyncio
 import os
 from dotenv import load_dotenv
 import threading
+import json
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# Simple auth (you can expand this)
+# Simple auth
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
-
-def get_bot():
-    from bot import bot
-    return bot
 
 @app.route('/')
 def index():
@@ -59,16 +56,22 @@ def config():
     }
     return jsonify(config_data)
 
-def run_web():
-    port = int(os.getenv('WEB_PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
-
-if __name__ == '__main__':
-    # Run web server in separate thread
-    web_thread = threading.Thread(target=run_web)
-    web_thread.start()
-    
-    # Run bot
+def run_bot():
+    """Run the Discord bot in a separate thread"""
+    from bot import bot, TOKEN, GUILD_ID
     import asyncio
-    from bot import main
-    asyncio.run(main())
+    
+    async def start_bot():
+        await bot.start(TOKEN)
+    
+    asyncio.run(start_bot())
+
+if __name__ == "__main__":
+    # Start Discord bot in background thread
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    
+    # Run Flask web server
+    port = int(os.getenv('WEB_PORT', 8080))
+    print(f"Starting web server on port {port}")
+    app.run(host='0.0.0.0', port=port)
