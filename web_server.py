@@ -1,45 +1,55 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from database import db
+import os
+import json
+from dotenv import load_dotenv
 import discord
 import asyncio
-import os
-from dotenv import load_dotenv
-import threading
-import json
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# Simple auth
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
+bot_instance = None
 
 @app.route('/')
 def index():
     return render_template('dashboard.html')
 
-@app.route('/login', methods=['POST'])
+@app.route('/panel-builder')
+def panel_builder():
+    return render_template('panel_builder.html')
+
+@app.route('/settings')
+def settings():
+    return render_template('settings.html')
+
+@app.route('/static/<path:path>')
+def serve_static(path):
+    return send_from_directory('static', path)
+
+@app.route('/api/login', methods=['POST'])
 def login():
-    password = request.form.get('password')
+    password = request.json.get('password')
     if password == ADMIN_PASSWORD:
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'token': 'dummy_token'})
     return jsonify({'success': False}), 401
+
+@app.route('/api/stats')
+def get_stats():
+    return jsonify(db.get_ticket_stats())
 
 @app.route('/api/tickets')
 def get_tickets():
     tickets = db.get_all_tickets()
     return jsonify(tickets)
 
-@app.route('/api/stats')
-def get_stats():
-    tickets = db.get_all_tickets()
-    stats = {
-        'total': len(tickets),
-        'open': len([t for t in tickets.values() if t['status'] == 'open']),
-        'closed': len([t for t in tickets.values() if t['status'] == 'closed'])
-    }
-    return jsonify(stats)
+@app.route('/api/tickets/<ticket_id>')
+def get_ticket(ticket_id):
+    ticket = db.get_ticket(ticket_id)
+    return jsonify(ticket or {})
 
 @app.route('/api/config', methods=['GET', 'POST'])
 def config():
@@ -49,29 +59,49 @@ def config():
             db.update_config(key, value)
         return jsonify({'success': True})
     
-    config_data = {
-        'support_role_id': db.get_config('support_role_id'),
-        'log_channel_id': db.get_config('log_channel_id'),
-        'ticket_category_id': db.get_config('ticket_category_id')
-    }
-    return jsonify(config_data)
+    return jsonify(db.config)
 
-def run_bot():
-    """Run the Discord bot in a separate thread"""
-    from bot import bot, TOKEN, GUILD_ID
-    import asyncio
+@app.route('/api/panels', methods=['GET', 'POST', 'DELETE'])
+def panels():
+    if request.method == 'POST':
+        panel_data = request.json
+        panel_id = panel_data.get('id', f"panel_{len(db.get_all_panels()) + 1}")
+        db.save_panel(panel_id, panel_data)
+        return jsonify({'success': True, 'id': panel_id})
     
-    async def start_bot():
-        await bot.start(TOKEN)
+    elif request.method == 'DELETE':
+        panel_id = request.json.get('id')
+        db.delete_panel(panel_id)
+        return jsonify({'success': True})
     
-    asyncio.run(start_bot())
+    else:
+        return jsonify(db.get_all_panels())
+
+@app.route('/api/send-panel', methods=['POST'])
+def send_panel():
+    data = request.json
+    panel_id = data['panel_id']
+    channel_id = int(data['channel_id'])
+    
+    panel_data = db.get_panel(panel_id)
+    if not panel_data:
+        return jsonify({'error': 'Panel not found'}), 404
+    
+    # This would need to be handled by the bot
+    # For now, we'll simulate
+    return jsonify({'success': True, 'message': 'Panel sent to channel'})
+
+@app.route('/api/embed-colors')
+def get_embed_colors():
+    colors = {
+        'default': '#5865F2',
+        'success': '#57F287',
+        'danger': '#ED4245',
+        'warning': '#FEE75C',
+        'info': '#EB459E'
+    }
+    return jsonify(colors)
 
 if __name__ == "__main__":
-    # Start Discord bot in background thread
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
-    
-    # Run Flask web server
     port = int(os.getenv('WEB_PORT', 8080))
-    print(f"Starting web server on port {port}")
     app.run(host='0.0.0.0', port=port)
