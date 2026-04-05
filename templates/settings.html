@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Settings - Ticket System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .settings-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: white;
+            margin-bottom: 20px;
+        }
+        
+        h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .info-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .success {
+            background: #4caf50;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .back-btn {
+            background: #666;
+            margin-bottom: 20px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/"><button class="back-btn">← Back to Dashboard</button></a>
+        <h1>⚙️ Bot Settings</h1>
+        
+        <div class="settings-card">
+            <h2>Discord Configuration</h2>
+            <div class="form-group">
+                <label>Support Role ID</label>
+                <input type="text" id="supportRoleId" placeholder="Enter role ID">
+                <div class="info-text">Users with this role can view and manage tickets</div>
+            </div>
+            
+            <div class="form-group">
+                <label>Log Channel ID</label>
+                <input type="text" id="logChannelId" placeholder="Enter channel ID">
+                <div class="info-text">Channel where ticket logs will be sent</div>
+            </div>
+            
+            <div class="form-group">
+                <label>Transcript Channel ID</label>
+                <input type="text" id="transcriptChannelId" placeholder="Enter channel ID">
+                <div class="info-text">Channel where closed ticket transcripts will be saved</div>
+            </div>
+            
+            <div class="form-group">
+                <label>Max Tickets Per User</label>
+                <input type="number" id="maxTickets" value="3" min="1" max="10">
+                <div class="info-text">Maximum number of open tickets a user can have</div>
+            </div>
+        </div>
+        
+        <div class="settings-card">
+            <h2>Default Embed Settings</h2>
+            <div class="form-group">
+                <label>Default Embed Title</label>
+                <input type="text" id="defaultTitle" placeholder="Support Tickets">
+            </div>
+            
+            <div class="form-group">
+                <label>Default Embed Description</label>
+                <textarea id="defaultDescription" rows="3" placeholder="Click a button to create a ticket..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>Default Embed Color</label>
+                <input type="color" id="defaultColor" value="#5865F2">
+            </div>
+        </div>
+        
+        <button onclick="saveSettings()">💾 Save All Settings</button>
+        <div id="successMsg" class="success">Settings saved successfully!</div>
+    </div>
+    
+    <script>
+        async function loadSettings() {
+            const response = await fetch('/api/config');
+            const config = await response.json();
+            
+            document.getElementById('supportRoleId').value = config.support_role_id || '';
+            document.getElementById('logChannelId').value = config.log_channel_id || '';
+            document.getElementById('transcriptChannelId').value = config.transcript_channel_id || '';
+            document.getElementById('maxTickets').value = config.max_tickets_per_user || 3;
+            document.getElementById('defaultTitle').value = config.default_embed_title || '';
+            document.getElementById('defaultDescription').value = config.default_embed_description || '';
+            document.getElementById('defaultColor').value = config.default_embed_color || '#5865F2';
+        }
+        
+        async function saveSettings() {
+            const settings = {
+                support_role_id: document.getElementById('supportRoleId').value || null,
+                log_channel_id: document.getElementById('logChannelId').value || null,
+                transcript_channel_id: document.getElementById('transcriptChannelId').value || null,
+                max_tickets_per_user: parseInt(document.getElementById('maxTickets').value),
+                default_embed_title: document.getElementById('defaultTitle').value,
+                default_embed_description: document.getElementById('defaultDescription').value,
+                default_embed_color: document.getElementById('defaultColor').value
+            };
+            
+            const response = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
+            
+            if (response.ok) {
+                const msg = document.getElementById('successMsg');
+                msg.style.display = 'block';
+                setTimeout(() => {
+                    msg.style.display = 'none';
+                }, 3000);
+            } else {
+                alert('Error saving settings');
+            }
+        }
+        
+        loadSettings();
+    </script>
+</body>
+</html>
