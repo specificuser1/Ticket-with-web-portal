@@ -107,7 +107,7 @@ class DynamicDropdown(discord.ui.Select):
 
 class TicketModal(discord.ui.Modal):
     def __init__(self, panel_id: str, category: str, title: str):
-        super().__init__(title=title[:45])  # Discord modal title limit
+        super().__init__(title=title[:45])
         self.panel_id = panel_id
         self.category = category
         
@@ -235,44 +235,49 @@ class TicketControls(discord.ui.View):
             
             await interaction.followup.send("Ticket closed successfully!", ephemeral=True)
 
-async def setup_bot_commands(bot_instance):
-    """Setup bot commands"""
+# Setup bot commands
+@bot.command(name="setup_ticket")
+@commands.has_permissions(administrator=True)
+async def setup_ticket(ctx):
+    """Setup ticket system in current channel"""
+    embed = discord.Embed(
+        title="🎫 Support Ticket System",
+        description="Click the button below to create a support ticket. Our team will assist you as soon as possible!",
+        color=discord.Color.blue()
+    )
     
-    @bot_instance.command(name="setup_ticket")
-    @commands.has_permissions(administrator=True)
-    async def setup_ticket(ctx):
-        """Setup ticket system in current channel"""
-        embed = discord.Embed(
-            title="🎫 Support Ticket System",
-            description="Click the button below to create a support ticket. Our team will assist you as soon as possible!",
-            color=discord.Color.blue()
-        )
-        # Create a default view if no panel exists
-        from bot import DynamicTicketView
-        panels = db.get_all_panels()
-        if panels:
-            first_panel_id = list(panels.keys())[0]
-            view = DynamicTicketView(first_panel_id, panels[first_panel_id])
-        else:
-            # Create default view
-            default_panel = {
-                'embed_title': 'Support Tickets',
-                'embed_description': 'Click the button below to create a ticket',
-                'buttons': [{'label': 'Support', 'style': 'primary', 'emoji': '🎫', 'category': 'General'}]
-            }
-            view = DynamicTicketView('default', default_panel)
-        
-        await ctx.send(embed=embed, view=view)
-        await ctx.send("Ticket system setup complete!", delete_after=5)
+    panels = db.get_all_panels()
+    if panels:
+        first_panel_id = list(panels.keys())[0]
+        view = DynamicTicketView(first_panel_id, panels[first_panel_id])
+    else:
+        # Create default panel
+        default_panel = {
+            'embed_title': 'Support Tickets',
+            'embed_description': 'Click the button below to create a ticket',
+            'buttons': [{'label': 'Support', 'style': 'primary', 'emoji': '🎫', 'category': 'General'}]
+        }
+        view = DynamicTicketView('default', default_panel)
+    
+    await ctx.send(embed=embed, view=view)
+    await ctx.send("✅ Ticket system setup complete!", delete_after=5)
 
-async def on_ready_handler(bot_instance):
-    """Handle bot ready event"""
-    print(f'✅ {bot_instance.user} has connected to Discord!')
-    guild = bot_instance.get_guild(GUILD_ID)
+@bot.command(name="reload_panels")
+@commands.has_permissions(administrator=True)
+async def reload_panels(ctx):
+    """Reload all ticket panels"""
+    for panel_id, panel_data in db.get_all_panels().items():
+        bot.add_view(DynamicTicketView(panel_id, panel_data))
+    await ctx.send("✅ All panels reloaded!")
+
+@bot.event
+async def on_ready():
+    print(f'✅ {bot.user} has connected to Discord!')
+    guild = bot.get_guild(GUILD_ID)
     if guild:
         print(f'📡 Connected to guild: {guild.name}')
     
     # Load all panels and register views
     for panel_id, panel_data in db.get_all_panels().items():
-        bot_instance.add_view(DynamicTicketView(panel_id, panel_data))
-        print(f"Loaded panel: {panel_id}")
+        bot.add_view(DynamicTicketView(panel_id, panel_data))
+        print(f"📦 Loaded panel: {panel_id}")
