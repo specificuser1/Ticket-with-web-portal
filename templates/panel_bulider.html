@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Builder - Ticket System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .builder-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .panel {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .panel h2 {
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .button-item {
+            background: #f5f5f5;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .preview {
+            background: #2c2f33;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .preview-embed {
+            background: #36393f;
+            border-radius: 8px;
+            padding: 20px;
+            color: white;
+        }
+        
+        .preview-button {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .color-preview {
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+            display: inline-block;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            color: #666;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        @media (max-width: 768px) {
+            .builder-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 Ticket Panel Builder</h1>
+            <p>Create and customize your ticket panels with buttons, dropdowns, and custom embeds</p>
+            <button onclick="savePanel()">💾 Save Panel</button>
+            <button onclick="sendToDiscord()">📤 Send to Discord</button>
+            <button onclick="window.location.href='/'">← Back to Dashboard</button>
+        </div>
+        
+        <div class="builder-grid">
+            <div class="panel">
+                <div class="tabs">
+                    <button class="tab active" onclick="showTab('embed')">Embed Settings</button>
+                    <button class="tab" onclick="showTab('buttons')">Buttons</button>
+                    <button class="tab" onclick="showTab('dropdown')">Dropdown Menu</button>
+                    <button class="tab" onclick="showTab('advanced')">Advanced</button>
+                </div>
+                
+                <div id="embedTab" class="tab-content active">
+                    <h2>Embed Configuration</h2>
+                    <div class="form-group">
+                        <label>Embed Title</label>
+                        <input type="text" id="embedTitle" placeholder="Support Tickets">
+                    </div>
+                    <div class="form-group">
+                        <label>Embed Description</label>
+                        <textarea id="embedDescription" rows="3" placeholder="Click a button below to create a support ticket..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Embed Color</label>
+                        <input type="color" id="embedColor" value="#5865F2">
+                        <span class="color-preview" id="colorPreview" style="background: #5865F2"></span>
+                    </div>
+                    <div class="form-group">
+                        <label>Footer Text</label>
+                        <input type="text" id="footerText" placeholder="Ticket System v2.0">
+                    </div>
+                    <div class="form-group">
+                        <label>Thumbnail URL</label>
+                        <input type="url" id="thumbnailUrl" placeholder="https://example.com/image.png">
+                    </div>
+                </div>
+                
+                <div id="buttonsTab" class="tab-content">
+                    <h2>Button Configuration</h2>
+                    <div id="buttonsList"></div>
+                    <button onclick="addButton()">+ Add Button</button>
+                </div>
+                
+                <div id="dropdownTab" class="tab-content">
+                    <h2>Dropdown Menu</h2>
+                    <div class="form-group">
+                        <label>Enable Dropdown</label>
+                        <input type="checkbox" id="enableDropdown">
+                    </div>
+                    <div id="dropdownConfig" style="display: none;">
+                        <div class="form-group">
+                            <label>Placeholder Text</label>
+                            <input type="text" id="dropdownPlaceholder" placeholder="Select a category...">
+                        </div>
+                        <div id="dropdownOptions"></div>
+                        <button onclick="addDropdownOption()">+ Add Option</button>
+                    </div>
+                </div>
+                
+                <div id="advancedTab" class="tab-content">
+                    <h2>Advanced Settings</h2>
+                    <div class="form-group">
+                        <label>Welcome Message (sent in ticket channel)</label>
+                        <textarea id="welcomeMessage" rows="3" placeholder="Welcome! Support team will be with you shortly..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Auto-close after (hours, 0 = disabled)</label>
+                        <input type="number" id="autoClose" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Max tickets per user (global setting)</label>
+                        <input type="number" id="maxTickets" value="3">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h2>Live Preview</h2>
+                <div class="preview">
+                    <div class="preview-embed" id="previewEmbed">
+                        <h3 id="previewTitle">Support Tickets</h3>
+                        <p id="previewDesc">Click a button below to create a support ticket...</p>
+                        <div id="previewButtons"></div>
+                        <div id="previewDropdown"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let buttons = [];
+        let dropdownOptions = [];
+        let currentPanelId = null;
+        
+        function showTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`${tab}Tab`).classList.add('active');
+        }
+        
+        function addButton() {
+            const id = buttons.length;
+            buttons.push({
+                id: id,
+                label: `Support ${buttons.length + 1}`,
+                style: 'primary',
+                emoji: '🎫',
+                category: 'General',
+                modal_title: 'Create Support Ticket',
+                row: Math.floor(buttons.length / 5)
+            });
+            renderButtons();
+        }
+        
+        function renderButtons() {
+            const container = document.getElementById('buttonsList');
+            container.innerHTML = '';
+            
+            buttons.forEach((button, index) => {
+                const div = document.createElement('div');
+                div.className = 'button-item';
+                div.innerHTML = `
+                    <input type="text" value="${button.label}" placeholder="Button Label" onchange="updateButton(${index}, 'label', this.value)">
+                    <select onchange="updateButton(${index}, 'style', this.value)">
+                        <option value="primary" ${button.style === 'primary' ? 'selected' : ''}>Primary (Blue)</option>
+                        <option value="secondary" ${button.style === 'secondary' ? 'selected' : ''}>Secondary (Grey)</option>
+                        <option value="success" ${button.style === 'success' ? 'selected' : ''}>Success (Green)</option>
+                        <option value="danger" ${button.style === 'danger' ? 'selected' : ''}>Danger (Red)</option>
+                    </select>
+                    <input type="text" value="${button.emoji}" placeholder="Emoji" onchange="updateButton(${index}, 'emoji', this.value)">
+                    <input type="text" value="${button.category}" placeholder="Category" onchange="updateButton(${index}, 'category', this.value)">
+                    <button onclick="removeButton(${index})">Remove</button>
+                `;
+                container.appendChild(div);
+            });
+            
+            updatePreview();
+        }
+        
+        function updateButton(index, field, value) {
+            buttons[index][field] = value;
+            updatePreview();
+        }
+        
+        function removeButton(index) {
+            buttons.splice(index, 1);
+            renderButtons();
+        }
+        
+        function addDropdownOption() {
+            dropdownOptions.push({
+                label: `Option ${dropdownOptions.length + 1}`,
+                description: '',
+                emoji: '📁',
+                value: `category_${dropdownOptions.length + 1}`,
+                modal_title: `${dropdownOptions.length + 1} Support`
+            });
+            renderDropdownOptions();
+        }
+        
+        function renderDropdownOptions() {
+            const container = document.getElementById('dropdownOptions');
+            container.innerHTML = '';
+            
+            dropdownOptions.forEach((option, index) => {
+                const div = document.createElement('div');
+                div.className = 'button-item';
+                div.innerHTML = `
+                    <input type="text" value="${option.label}" placeholder="Label" onchange="updateDropdownOption(${index}, 'label', this.value)">
+                    <input type="text" value="${option.description}" placeholder="Description" onchange="updateDropdownOption(${index}, 'description', this.value)">
+                    <input type="text" value="${option.emoji}" placeholder="Emoji" onchange="updateDropdownOption(${index}, 'emoji', this.value)">
+                    <button onclick="removeDropdownOption(${index})">Remove</button>
+                `;
+                container.appendChild(div);
+            });
+            
+            updatePreview();
+        }
+        
+        function updateDropdownOption(index, field, value) {
+            dropdownOptions[index][field] = value;
+            updatePreview();
+        }
+        
+        function removeDropdownOption(index) {
+            dropdownOptions.splice(index, 1);
+            renderDropdownOptions();
+        }
+        
+        function updatePreview() {
+            // Update embed preview
+            document.getElementById('previewTitle').textContent = document.getElementById('embedTitle').value || 'Support Tickets';
+            document.getElementById('previewDesc').textContent = document.getElementById('embedDescription').value || 'Click a button below to create a support ticket...';
+            
+            // Update buttons preview
+            const previewButtons = document.getElementById('previewButtons');
+            previewButtons.innerHTML = '';
+            buttons.forEach(button => {
+                const btn = document.createElement('div');
+                btn.className = 'preview-button';
+                btn.style.background = getButtonColor(button.style);
+                btn.textContent = `${button.emoji} ${button.label}`;
+                previewButtons.appendChild(btn);
+            });
+            
+            // Update dropdown preview
+            const previewDropdown = document.getElementById('previewDropdown');
+            if (document.getElementById('enableDropdown').checked && dropdownOptions.length > 0) {
+                previewDropdown.innerHTML = '<select style="width: 100%; padding: 8px; margin-top: 10px;"><option>Select category...</option></select>';
+            } else {
+                previewDropdown.innerHTML = '';
+            }
+            
+            // Update color preview
+            const color = document.getElementById('embedColor').value;
+            document.getElementById('colorPreview').style.background = color;
+            document.querySelector('.preview-embed').style.borderLeft = `4px solid ${color}`;
+        }
+        
+        function getButtonColor(style) {
+            const colors = {
+                primary: '#5865F2',
+                secondary: '#4f545c',
+                success: '#57F287',
+                danger: '#ED4245'
+            };
+            return colors[style] || '#5865F2';
+        }
+        
+        async function savePanel() {
+            const panelData = {
+                id: currentPanelId || `panel_${Date.now()}`,
+                embed_title: document.getElementById('embedTitle').value,
+                embed_description: document.getElementById('embedDescription').value,
+                embed_color: document.getElementById('embedColor').value,
+                footer_text: document.getElementById('footerText').value,
+                thumbnail_url: document.getElementById('thumbnailUrl').value,
+                buttons: buttons,
+                dropdown: document.getElementById('enableDropdown').checked ? {
+                    placeholder: document.getElementById('dropdownPlaceholder').value,
+                    options: dropdownOptions
+                } : null,
+                welcome_message: document.getElementById('welcomeMessage').value,
+                auto_close: parseInt(document.getElementById('autoClose').value),
+                max_tickets: parseInt(document.getElementById('maxTickets').value)
+            };
+            
+            const response = await fetch('/api/panels', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(panelData)
+            });
+            
+            if (response.ok) {
+                currentPanelId = panelData.id;
+                alert('Panel saved successfully!');
+            } else {
+                alert('Error saving panel');
+            }
+        }
+        
+        async function sendToDiscord() {
+            const channelId = prompt('Enter Discord channel ID to send the panel to:');
+            if (!channelId) return;
+            
+            await savePanel();
+            
+            const response = await fetch('/api/send-panel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    panel_id: currentPanelId,
+                    channel_id: channelId
+                })
+            });
+            
+            if (response.ok) {
+                alert('Panel sent to Discord!');
+            } else {
+                alert('Error sending panel. Make sure the bot is running and has permissions.');
+            }
+        }
+        
+        // Event listeners for live preview
+        document.getElementById('embedTitle').addEventListener('input', updatePreview);
+        document.getElementById('embedDescription').addEventListener('input', updatePreview);
+        document.getElementById('embedColor').addEventListener('input', updatePreview);
+        document.getElementById('enableDropdown').addEventListener('change', () => {
+            document.getElementById('dropdownConfig').style.display = 
+                document.getElementById('enableDropdown').checked ? 'block' : 'none';
+            updatePreview();
+        });
+        
+        // Initialize
+        renderButtons();
+        updatePreview();
+    </script>
+</body>
+</html>
