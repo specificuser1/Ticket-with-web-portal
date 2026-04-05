@@ -25,11 +25,11 @@ class DynamicTicketView(discord.ui.View):
         
         # Add buttons based on panel configuration
         for button_data in panel_data.get('buttons', []):
-            if button_data.get('type') == 'button':
+            if button_data.get('type') == 'button' or 'label' in button_data:
                 self.add_item(DynamicButton(panel_id, button_data))
         
         # Add dropdown if configured
-        if panel_data.get('dropdown'):
+        if panel_data.get('dropdown') and panel_data['dropdown'].get('options'):
             self.add_item(DynamicDropdown(panel_id, panel_data['dropdown']))
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -47,11 +47,19 @@ class DynamicTicketView(discord.ui.View):
 
 class DynamicButton(discord.ui.Button):
     def __init__(self, panel_id: str, button_data: dict):
+        style_map = {
+            'primary': discord.ButtonStyle.primary,
+            'secondary': discord.ButtonStyle.secondary,
+            'success': discord.ButtonStyle.success,
+            'danger': discord.ButtonStyle.danger
+        }
+        style = style_map.get(button_data.get('style', 'primary'), discord.ButtonStyle.primary)
+        
         super().__init__(
-            label=button_data['label'],
-            style=getattr(discord.ButtonStyle, button_data.get('style', 'primary')),
-            custom_id=f"{panel_id}_{button_data['id']}",
-            emoji=button_data.get('emoji'),
+            label=button_data.get('label', 'Support'),
+            style=style,
+            custom_id=f"{panel_id}_{button_data.get('id', 'btn')}",
+            emoji=button_data.get('emoji', '🎫'),
             row=button_data.get('row', 0)
         )
         self.panel_id = panel_id
@@ -68,10 +76,10 @@ class DynamicDropdown(discord.ui.Select):
         for option in dropdown_data.get('options', []):
             options.append(
                 discord.SelectOption(
-                    label=option['label'],
-                    description=option.get('description'),
-                    emoji=option.get('emoji'),
-                    value=option['value']
+                    label=option.get('label', 'Option'),
+                    description=option.get('description', ''),
+                    emoji=option.get('emoji', '📁'),
+                    value=option.get('value', 'category')
                 )
             )
         
@@ -87,20 +95,19 @@ class DynamicDropdown(discord.ui.Select):
     
     async def callback(self, interaction: discord.Interaction):
         selected = self.values[0]
-        # Find selected option data
         option_data = next((opt for opt in self.dropdown_data['options'] if opt['value'] == selected), None)
         
         if option_data:
             modal = TicketModal(
                 self.panel_id, 
-                option_data['label'], 
-                option_data.get('modal_title', f"{option_data['label']} Support")
+                option_data.get('label', 'Support'), 
+                option_data.get('modal_title', f"{option_data.get('label', 'Support')} Support")
             )
             await interaction.response.send_modal(modal)
 
 class TicketModal(discord.ui.Modal):
     def __init__(self, panel_id: str, category: str, title: str):
-        super().__init__(title=title)
+        super().__init__(title=title[:45])  # Discord modal title limit
         self.panel_id = panel_id
         self.category = category
         
@@ -131,9 +138,7 @@ class TicketModal(discord.ui.Modal):
             category = await guild.create_category("Tickets")
             db.update_config("ticket_category_id", category.id)
         
-        # Check existing tickets
-        existing_tickets = [c for c in category.channels if f"ticket-{interaction.user.name}" in c.name.lower()]
-        ticket_number = len(existing_tickets) + 1
+        ticket_number = len([c for c in category.channels if isinstance(c, discord.TextChannel) and f"ticket-{interaction.user.name}" in c.name.lower()]) + 1
         
         channel_name = f"ticket-{interaction.user.name}-{ticket_number}"
         
@@ -154,9 +159,7 @@ class TicketModal(discord.ui.Modal):
         ticket_id = f"{interaction.user.id}_{ticket_number}"
         db.create_ticket(ticket_id, interaction.user.id, channel.id, self.topic.value, self.panel_id)
         
-        # Get embed settings from panel
-        panel_data = db.get_panel(self.panel_id)
-        embed_color = int(panel_data.get('embed_color', '#5865F2').lstrip('#'), 16) if panel_data else 0x5865F2
+        embed_color = int(db.get_config('default_embed_color', '#5865F2').lstrip('#'), 16)
         
         embed = discord.Embed(
             title=f"🎫 Ticket: {self.category}",
@@ -172,11 +175,6 @@ class TicketModal(discord.ui.Modal):
         view = TicketControls(ticket_id)
         await channel.send(embed=embed, view=view)
         await channel.send(f"{interaction.user.mention} Support team will assist you shortly!")
-        
-        # Send welcome message if configured
-        welcome_msg = panel_data.get('welcome_message') if panel_data else None
-        if welcome_msg:
-            await channel.send(welcome_msg)
         
         await interaction.response.send_message(f"✅ Ticket created! Check {channel.mention}", ephemeral=True)
         
@@ -207,7 +205,6 @@ class TicketControls(discord.ui.View):
         if ticket_data:
             channel = interaction.guild.get_channel(ticket_data["channel_id"])
             
-            # Collect transcript
             transcript = []
             if channel:
                 async for message in channel.history(limit=200):
@@ -219,40 +216,13 @@ class TicketControls(discord.ui.View):
             
             db.close_ticket(self.ticket_id, transcript)
             
-            # Save transcript to channel
-            transcript_channel_id = db.get_config("transcript_channel_id")
-            if transcript_channel_id and channel:
-                transcript_channel = interaction.guild.get_channel(transcript_channel_id)
-                if transcript_channel:
-                    transcript_text = f"**Ticket Transcript - {self.ticket_id}**\n\n"
-                    for msg in transcript[-50:]:  # Last 50 messages
-                        transcript_text += f"[{msg['timestamp']}] {msg['author']}: {msg['content']}\n"
-                    
-                    if len(transcript_text) > 1900:
-                        transcript_text = transcript_text[:1900] + "..."
-                    
-                    await transcript_channel.send(f"📜 **Ticket Closed:** {self.ticket_id}\n```{transcript_text}```")
-            
             if channel:
                 await channel.send("🔒 Ticket is being closed...")
                 await asyncio.sleep(2)
                 await channel.delete()
             
-            # Log closure
-            log_channel_id = db.get_config("log_channel_id")
-            if log_channel_id:
-                log_channel = interaction.guild.get_channel(log_channel_id)
-                if log_channel:
-                    embed = discord.Embed(
-                        title="🔒 Ticket Closed",
-                        description=f"Ticket closed by {interaction.user.mention}",
-                        color=discord.Color.red(),
-                        timestamp=datetime.utcnow()
-                    )
-                    await log_channel.send(embed=embed)
-            
             try:
-                user = await bot.fetch_user(ticket_data["user_id"])
+                user = await interaction.client.fetch_user(ticket_data["user_id"])
                 if user:
                     embed = discord.Embed(
                         title="Ticket Closed",
@@ -262,84 +232,47 @@ class TicketControls(discord.ui.View):
                     await user.send(embed=embed)
             except:
                 pass
-    
-    @discord.ui.button(label="Claim Ticket", style=discord.ButtonStyle.success, emoji="✋", row=0)
-    async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        support_role_id = db.get_config("support_role_id")
-        if support_role_id:
-            support_role = interaction.guild.get_role(support_role_id)
-            if support_role not in interaction.user.roles:
-                await interaction.response.send_message("❌ You don't have permission to claim tickets!", ephemeral=True)
-                return
-        
-        await interaction.response.send_message(f"✅ Ticket claimed by {interaction.user.mention}", ephemeral=False)
-        
-        # Update embed to show claimed by
-        channel = interaction.channel
-        async for message in channel.history(limit=1):
-            if message.embeds:
-                embed = message.embeds[0]
-                embed.add_field(name="Claimed by", value=interaction.user.mention, inline=True)
-                await message.edit(embed=embed)
-                break
-    
-    @discord.ui.button(label="Add Note", style=discord.ButtonStyle.secondary, emoji="📝", row=1)
-    async def add_note(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modal = NoteModal(self.ticket_id)
-        await interaction.response.send_modal(modal)
+            
+            await interaction.followup.send("Ticket closed successfully!", ephemeral=True)
 
-class NoteModal(discord.ui.Modal, title="Add Staff Note"):
-    note = discord.ui.TextInput(
-        label="Note",
-        placeholder="Add internal note for staff...",
-        style=discord.TextStyle.paragraph,
-        required=True
-    )
+async def setup_bot_commands(bot_instance):
+    """Setup bot commands"""
     
-    def __init__(self, ticket_id: str):
-        super().__init__()
-        self.ticket_id = ticket_id
-    
-    async def on_submit(self, interaction: discord.Interaction):
+    @bot_instance.command(name="setup_ticket")
+    @commands.has_permissions(administrator=True)
+    async def setup_ticket(ctx):
+        """Setup ticket system in current channel"""
         embed = discord.Embed(
-            title="📝 Staff Note",
-            description=self.note.value,
-            color=discord.Color.gold(),
-            timestamp=datetime.utcnow()
+            title="🎫 Support Ticket System",
+            description="Click the button below to create a support ticket. Our team will assist you as soon as possible!",
+            color=discord.Color.blue()
         )
-        embed.set_footer(text=f"Added by {interaction.user.name}")
+        # Create a default view if no panel exists
+        from bot import DynamicTicketView
+        panels = db.get_all_panels()
+        if panels:
+            first_panel_id = list(panels.keys())[0]
+            view = DynamicTicketView(first_panel_id, panels[first_panel_id])
+        else:
+            # Create default view
+            default_panel = {
+                'embed_title': 'Support Tickets',
+                'embed_description': 'Click the button below to create a ticket',
+                'buttons': [{'label': 'Support', 'style': 'primary', 'emoji': '🎫', 'category': 'General'}]
+            }
+            view = DynamicTicketView('default', default_panel)
         
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await ctx.send(embed=embed, view=view)
+        await ctx.send("Ticket system setup complete!", delete_after=5)
 
-@bot.event
-async def on_ready():
-    print(f'✅ {bot.user} has connected to Discord!')
-    guild = bot.get_guild(GUILD_ID)
+async def on_ready_handler(bot_instance):
+    """Handle bot ready event"""
+    print(f'✅ {bot_instance.user} has connected to Discord!')
+    guild = bot_instance.get_guild(GUILD_ID)
     if guild:
         print(f'📡 Connected to guild: {guild.name}')
     
     # Load all panels and register views
     for panel_id, panel_data in db.get_all_panels().items():
-        if panel_data.get('channel_id'):
-            channel = bot.get_channel(panel_data['channel_id'])
-            if channel:
-                bot.add_view(DynamicTicketView(panel_id, panel_data))
-
-@bot.command(name="reload_panels")
-@commands.has_permissions(administrator=True)
-async def reload_panels(ctx):
-    """Reload all ticket panels"""
-    for panel_id, panel_data in db.get_all_panels().items():
-        if panel_data.get('channel_id'):
-            channel = ctx.guild.get_channel(panel_data['channel_id'])
-            if channel:
-                view = DynamicTicketView(panel_id, panel_data)
-                await channel.send("🔄 Panels reloaded!", delete_after=5)
-    
-    await ctx.send("✅ All panels reloaded!")
-
-async def main():
-    await bot.start(TOKEN)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        bot_instance.add_view(DynamicTicketView(panel_id, panel_data))
+        print(f"Loaded panel: {panel_id}")
