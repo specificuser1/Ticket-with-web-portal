@@ -44,9 +44,10 @@
             text-decoration: none;
             border-radius: 10px;
             transition: all 0.3s;
+            cursor: pointer;
         }
         
-        .sidebar nav a:hover, .sidebar nav a.active {
+        .sidebar nav a:hover {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
@@ -82,6 +83,7 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
         .stat-label {
@@ -173,6 +175,7 @@
         
         canvas {
             max-height: 300px;
+            margin-bottom: 20px;
         }
         
         @media (max-width: 768px) {
@@ -188,7 +191,7 @@
     </style>
 </head>
 <body>
-    <div id="loginContainer" class="login-container" style="display: none;">
+    <div id="loginContainer" class="login-container">
         <h1>🎫 Ticket System Login</h1>
         <input type="password" id="password" placeholder="Admin Password">
         <button onclick="login()">Login</button>
@@ -199,10 +202,10 @@
         <div class="sidebar">
             <h2>🎫 Ticket System</h2>
             <nav>
-                <a href="#" onclick="showPage('dashboard')" class="active">Dashboard</a>
-                <a href="/panel-builder" target="_blank">Panel Builder</a>
-                <a href="/settings" target="_blank">Settings</a>
-                <a href="#" onclick="logout()">Logout</a>
+                <a onclick="showPage('dashboard')">Dashboard</a>
+                <a onclick="openPanelBuilder()">Panel Builder</a>
+                <a onclick="openSettings()">Settings</a>
+                <a onclick="logout()">Logout</a>
             </nav>
         </div>
         
@@ -244,9 +247,12 @@
         let isLoggedIn = false;
         let chart = null;
         
-        function showLogin() {
-            document.getElementById('loginContainer').style.display = 'block';
-            document.getElementById('app').style.display = 'none';
+        function openPanelBuilder() {
+            window.location.href = '/panel-builder';
+        }
+        
+        function openSettings() {
+            window.location.href = '/settings';
         }
         
         async function login() {
@@ -282,7 +288,6 @@
                 document.getElementById('openTickets').textContent = stats.open;
                 document.getElementById('closedTickets').textContent = stats.closed;
                 
-                // Update chart
                 if (chart) {
                     chart.data.datasets[0].data = [stats.open, stats.closed];
                     chart.update();
@@ -294,20 +299,24 @@
                 const ticketsList = document.getElementById('ticketsList');
                 ticketsList.innerHTML = '<h3>Ticket History</h3>';
                 
-                Object.entries(tickets).slice(0, 20).forEach(([id, ticket]) => {
-                    const ticketDiv = document.createElement('div');
-                    ticketDiv.className = 'ticket-item';
-                    ticketDiv.onclick = () => showTicketDetails(id, ticket);
-                    ticketDiv.innerHTML = `
-                        <strong>${id}</strong><br>
-                        User: <code>${ticket.user_id}</code><br>
-                        Topic: ${ticket.topic}<br>
-                        Status: <span class="status status-${ticket.status}">${ticket.status.toUpperCase()}</span><br>
-                        Created: ${new Date(ticket.created_at).toLocaleString()}
-                    `;
-                    ticketsList.appendChild(ticketDiv);
-                });
-                
+                const ticketsArray = Object.entries(tickets).slice(0, 20);
+                if (ticketsArray.length === 0) {
+                    ticketsList.innerHTML += '<p>No tickets found.</p>';
+                } else {
+                    ticketsArray.forEach(([id, ticket]) => {
+                        const ticketDiv = document.createElement('div');
+                        ticketDiv.className = 'ticket-item';
+                        ticketDiv.onclick = () => showTicketDetails(id, ticket);
+                        ticketDiv.innerHTML = `
+                            <strong>${id}</strong><br>
+                            User: <code>${ticket.user_id}</code><br>
+                            Topic: ${ticket.topic}<br>
+                            Status: <span class="status status-${ticket.status}">${ticket.status.toUpperCase()}</span><br>
+                            Created: ${new Date(ticket.created_at).toLocaleString()}
+                        `;
+                        ticketsList.appendChild(ticketDiv);
+                    });
+                }
             } catch (error) {
                 console.error('Error loading dashboard:', error);
             }
@@ -315,14 +324,19 @@
         
         function showTicketDetails(id, ticket) {
             document.getElementById('modalTitle').textContent = `Ticket: ${id}`;
-            document.getElementById('modalContent').innerHTML = `
+            let content = `
                 <p><strong>User ID:</strong> ${ticket.user_id}</p>
                 <p><strong>Topic:</strong> ${ticket.topic}</p>
                 <p><strong>Status:</strong> ${ticket.status}</p>
                 <p><strong>Created:</strong> ${new Date(ticket.created_at).toLocaleString()}</p>
-                ${ticket.closed_at ? `<p><strong>Closed:</strong> ${new Date(ticket.closed_at).toLocaleString()}</p>` : ''}
-                ${ticket.transcript ? `<details><summary>View Transcript</summary><pre>${JSON.stringify(ticket.transcript, null, 2)}</pre></details>` : ''}
             `;
+            if (ticket.closed_at) {
+                content += `<p><strong>Closed:</strong> ${new Date(ticket.closed_at).toLocaleString()}</p>`;
+            }
+            if (ticket.transcript) {
+                content += `<details><summary>View Transcript</summary><pre>${JSON.stringify(ticket.transcript, null, 2)}</pre></details>`;
+            }
+            document.getElementById('modalContent').innerHTML = content;
             document.getElementById('ticketModal').style.display = 'flex';
         }
         
@@ -336,7 +350,9 @@
         
         function logout() {
             isLoggedIn = false;
-            showLogin();
+            document.getElementById('app').style.display = 'none';
+            document.getElementById('loginContainer').style.display = 'block';
+            document.getElementById('password').value = '';
         }
         
         // Initialize chart
@@ -351,9 +367,6 @@
                 }]
             }
         });
-        
-        // Check if already logged in
-        showLogin();
     </script>
 </body>
 </html>
