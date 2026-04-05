@@ -1,3 +1,4 @@
+```
 ticket-bot/
 ├── bot.py
 ├── web_server.py
@@ -7,3 +8,4 @@ ticket-bot/
 ├── requirements.txt
 ├── .env
 └── railway.json
+```
