@@ -1,12 +1,10 @@
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify
 from database import db
 import os
-import json
 from dotenv import load_dotenv
 import traceback
 import asyncio
 import discord
-from threading import Thread
 
 load_dotenv()
 
@@ -27,7 +25,6 @@ def index():
     try:
         return render_template('dashboard.html')
     except Exception as e:
-        print(f"Error rendering dashboard: {e}")
         return f"Error: {str(e)}", 500
 
 @app.route('/panel-builder')
@@ -35,25 +32,21 @@ def panel_builder():
     try:
         return render_template('panel_builder.html')
     except Exception as e:
-        print(f"Error rendering panel_builder: {e}")
-        traceback.print_exc()
-        return f"Error loading panel builder: {str(e)}", 500
+        return f"Error: {str(e)}", 500
 
 @app.route('/settings')
 def settings():
     try:
         return render_template('settings.html')
     except Exception as e:
-        print(f"Error rendering settings: {e}")
-        traceback.print_exc()
-        return f"Error loading settings: {str(e)}", 500
+        return f"Error: {str(e)}", 500
 
 @app.route('/api/login', methods=['POST'])
 def login():
     try:
         password = request.json.get('password')
         if password == ADMIN_PASSWORD:
-            return jsonify({'success': True, 'token': 'dummy_token'})
+            return jsonify({'success': True})
         return jsonify({'success': False}), 401
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -73,14 +66,6 @@ def get_tickets():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/tickets/<ticket_id>')
-def get_ticket(ticket_id):
-    try:
-        ticket = db.get_ticket(ticket_id)
-        return jsonify(ticket or {})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/config', methods=['GET', 'POST'])
 def config():
     try:
@@ -93,7 +78,7 @@ def config():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/panels', methods=['GET', 'POST', 'DELETE'])
+@app.route('/api/panels', methods=['GET', 'POST'])
 def panels():
     try:
         if request.method == 'POST':
@@ -101,10 +86,6 @@ def panels():
             panel_id = panel_data.get('id', f"panel_{len(db.get_all_panels()) + 1}")
             db.save_panel(panel_id, panel_data)
             return jsonify({'success': True, 'id': panel_id})
-        elif request.method == 'DELETE':
-            panel_id = request.json.get('id')
-            db.delete_panel(panel_id)
-            return jsonify({'success': True})
         else:
             return jsonify(db.get_all_panels())
     except Exception as e:
@@ -142,15 +123,22 @@ async def send_panel_to_discord(bot, channel_id, panel_id, panel_data):
     try:
         channel = bot.get_channel(channel_id)
         if not channel:
-            print(f"Channel {channel_id} not found")
+            print(f"❌ Channel {channel_id} not found")
             return
         
-        # Create embed
+        # Create embed with proper description
+        embed_title = panel_data.get('embed_title', 'Support Tickets')
+        embed_description = panel_data.get('embed_description', 'Click a button below to create a support ticket.')
+        
+        # Make sure description is not empty
+        if not embed_description or embed_description.strip() == '':
+            embed_description = 'Click a button below to create a support ticket.'
+        
         embed_color = int(panel_data.get('embed_color', '#5865F2').lstrip('#'), 16)
         
         embed = discord.Embed(
-            title=panel_data.get('embed_title', 'Support Tickets'),
-            description=panel_data.get('embed_description', 'Click a button below to create a support ticket. Our team will assist you shortly!'),
+            title=embed_title,
+            description=embed_description,
             color=embed_color
         )
         
@@ -168,33 +156,11 @@ async def send_panel_to_discord(bot, channel_id, panel_id, panel_data):
         
         # Send to channel
         await channel.send(embed=embed, view=view)
-        print(f"Panel {panel_id} sent to channel {channel_id}")
+        print(f"✅ Panel {panel_id} sent to channel {channel_id}")
         
     except Exception as e:
-        print(f"Error sending panel to Discord: {e}")
+        print(f"❌ Error sending panel to Discord: {e}")
         traceback.print_exc()
-
-@app.route('/api/embed-colors')
-def get_embed_colors():
-    colors = {
-        'default': '#5865F2',
-        'success': '#57F287',
-        'danger': '#ED4245',
-        'warning': '#FEE75C',
-        'info': '#EB459E'
-    }
-    return jsonify(colors)
-
-@app.route('/debug-templates')
-def debug_templates():
-    import os
-    template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-    files = os.listdir(template_dir) if os.path.exists(template_dir) else []
-    return jsonify({
-        'template_dir': template_dir,
-        'exists': os.path.exists(template_dir),
-        'files': files
-    })
 
 if __name__ == "__main__":
     port = int(os.getenv('WEB_PORT', 8080))
